@@ -1,53 +1,64 @@
+import re
 import customtkinter as ctk
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 from tkinter import messagebox
 
 from modules.file_engine import preview_filename, generate_filename
 from modules.file_creator import create_empty_file, copy_to_clipboard
 
-EXTENSIONS = ["PDF", "DOCX", "XLSX", "JPG"]
+EXTENSIONS = [
+    "DOCX", "XLSX", "PDF", "CSV", "XML", "ZIP",
+    "JPG", "PNG", "PPTX", "TXT",
+]
+
+_CUSTOM_PLACEHOLDER = "e.g. GST_Return, Balance_Sheet, Legal_Notice…"
+_APPEND_PLACEHOLDER  = "Add name / note (optional, e.g. Prashant, ABC_Ltd)"
 
 
 class CreateFileDialog(ctk.CTkToplevel):
     """
-    Modal dialog for creating a new file with an auto-generated name
-    that encodes the full folder path from root.
+    Modal dialog for creating a new file with an auto-generated name.
+    The extra text field is always visible:
+      - When '— Custom —' is selected  → it IS the document type
+      - When a preset is selected       → its text is appended after the preset
+    The filename preview is fully editable.
     """
 
-    def __init__(self, master, current_path: Path, root_path: Path, doc_types: list, on_success=None):
+    def __init__(self, master, current_path: Path, root_path: Path,
+                 doc_types: list, settings=None, on_success=None):
         super().__init__(master)
         self.current_path = current_path
         self.root_path = root_path
         self.doc_types = doc_types
+        self.settings = settings
         self.on_success = on_success
 
         self.title("Create New File")
-        self.geometry("540x560")
         self.resizable(False, False)
         self.transient(master)
-
-        # macOS: lift above parent after a short delay
         self.after(50, self.lift)
         self.after(100, self.grab_set)
 
-        self._center_on(master)
+        include_date_default = settings.get("include_date", True) if settings else True
 
-        # StringVars
-        self._doc_type_var = ctk.StringVar(value=doc_types[0] if doc_types else "")
-        self._custom_var = ctk.StringVar()
-        self._date_var = ctk.StringVar(value=date.today().strftime("%Y%m%d"))
-        self._ext_var = ctk.StringVar(value="PDF")
-        self._showing_custom = False
+        self._doc_type_var     = ctk.StringVar(value="— Custom —")
+        self._extra_var        = ctk.StringVar()   # custom text OR append text
+        self._date_var         = ctk.StringVar(value=date.today().strftime("%d-%m-%Y"))
+        self._ext_var          = ctk.StringVar(value="DOCX")
+        self._include_date_var = ctk.BooleanVar(value=include_date_default)
 
         self._build_ui()
+        self._toggle_date_fields()
         self._update_preview()
 
-        # Live preview — trace all inputs
-        self._doc_type_var.trace_add("write", lambda *_: self._update_preview())
-        self._custom_var.trace_add("write", lambda *_: self._update_preview())
-        self._date_var.trace_add("write", lambda *_: self._update_preview())
-        self._ext_var.trace_add("write", lambda *_: self._update_preview())
+        self.after(50, self._center_on_screen)
+
+        self._doc_type_var.trace_add("write",     lambda *_: self._on_doc_type_change())
+        self._extra_var.trace_add("write",        lambda *_: self._update_preview())
+        self._date_var.trace_add("write",         lambda *_: self._update_preview())
+        self._ext_var.trace_add("write",          lambda *_: self._update_preview())
+        self._include_date_var.trace_add("write", lambda *_: self._on_include_date_toggle())
 
     # ------------------------------------------------------------------
     # Layout
@@ -60,144 +71,147 @@ class CreateFileDialog(ctk.CTkToplevel):
         ctk.CTkLabel(
             self, text="Create New File",
             font=ctk.CTkFont(size=20, weight="bold"),
-        ).grid(row=0, column=0, padx=24, pady=(22, 2), sticky="w")
+        ).grid(row=0, column=0, padx=24, pady=(18, 2), sticky="w")
 
-        # Path context
+        # Path breadcrumb
         try:
             rel = self.current_path.resolve().relative_to(self.root_path.resolve())
             parts = list(rel.parts)
         except ValueError:
             parts = [self.current_path.name]
-
         path_display = " › ".join(parts) if parts else str(self.current_path)
         ctk.CTkLabel(
             self, text=f"📁  {path_display}",
             font=ctk.CTkFont(size=12),
             text_color=("gray50", "gray60"),
-            wraplength=492,
-            justify="left",
-            anchor="w",
-        ).grid(row=1, column=0, padx=24, pady=(0, 14), sticky="w")
+            wraplength=512, justify="left", anchor="w",
+        ).grid(row=1, column=0, padx=24, pady=(0, 10), sticky="w")
 
-        # Divider
         ctk.CTkFrame(self, height=1, fg_color=("gray82", "gray28")).grid(
             row=2, column=0, sticky="ew", padx=16
         )
 
-        # --- Document Type ---
+        # --- Document Type dropdown ---
         ctk.CTkLabel(
             self, text="Document Type",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=3, column=0, padx=24, pady=(14, 4), sticky="w")
+        ).grid(row=3, column=0, padx=24, pady=(12, 4), sticky="w")
 
-        dropdown_values = self.doc_types + ["— Custom —"]
         self._doc_dropdown = ctk.CTkOptionMenu(
             self,
-            values=dropdown_values,
+            values=self.doc_types + ["— Custom —"],
             variable=self._doc_type_var,
-            command=self._on_doc_type_change,
-            width=492,
-            height=38,
+            command=lambda _: self._on_doc_type_change(),
+            width=512, height=38,
             font=ctk.CTkFont(size=13),
             dropdown_font=ctk.CTkFont(size=13),
         )
-        self._doc_dropdown.grid(row=4, column=0, padx=24, pady=(0, 4), sticky="w")
+        self._doc_dropdown.grid(row=4, column=0, padx=24, sticky="w")
 
-        # Custom entry — hidden by default
-        self._custom_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self._custom_frame.grid(row=5, column=0, padx=24, sticky="ew")
-        self._custom_frame.columnconfigure(0, weight=1)
-
-        self._custom_entry = ctk.CTkEntry(
-            self._custom_frame,
-            textvariable=self._custom_var,
-            placeholder_text="Type your custom document type (e.g. Legal_Notice_Reply)…",
+        # --- Extra text field (always visible) ---
+        self._extra_entry = ctk.CTkEntry(
+            self,
+            textvariable=self._extra_var,
+            placeholder_text=_CUSTOM_PLACEHOLDER,
             height=36,
             font=ctk.CTkFont(size=13),
         )
-        # Start hidden
-        self._custom_entry_visible = False
+        self._extra_entry.grid(row=5, column=0, padx=24, pady=(6, 0), sticky="ew")
+        self._extra_entry.bind("<KeyRelease>", lambda _: self._update_preview())
 
-        # --- Date + Extension (same row) ---
-        row6 = ctk.CTkFrame(self, fg_color="transparent")
-        row6.grid(row=6, column=0, padx=24, pady=(12, 0), sticky="ew")
+        # --- Date + File Type row ---
+        date_row = ctk.CTkFrame(self, fg_color="transparent")
+        date_row.grid(row=6, column=0, padx=24, pady=(12, 0), sticky="ew")
 
-        ctk.CTkLabel(row6, text="Date", font=ctk.CTkFont(size=13, weight="bold")).grid(
-            row=0, column=0, sticky="w"
+        self._include_date_cb = ctk.CTkCheckBox(
+            date_row, text="Include date in filename",
+            variable=self._include_date_var,
+            font=ctk.CTkFont(size=13),
         )
-        ctk.CTkLabel(row6, text="File Type", font=ctk.CTkFont(size=13, weight="bold")).grid(
-            row=0, column=1, padx=(40, 0), sticky="w"
-        )
+        self._include_date_cb.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+
+        ctk.CTkLabel(date_row, text="Date",
+                     font=ctk.CTkFont(size=13, weight="bold")).grid(row=1, column=0, sticky="w")
+        ctk.CTkLabel(date_row, text="File Type",
+                     font=ctk.CTkFont(size=13, weight="bold")).grid(row=1, column=2, padx=(24, 0), sticky="w")
+
+        date_input = ctk.CTkFrame(date_row, fg_color="transparent")
+        date_input.grid(row=2, column=0, pady=(4, 0), sticky="w")
 
         self._date_entry = ctk.CTkEntry(
-            row6,
-            textvariable=self._date_var,
-            width=160,
-            height=38,
-            font=ctk.CTkFont(size=13),
-            placeholder_text="YYYYMMDD",
+            date_input, textvariable=self._date_var,
+            width=140, height=36, font=ctk.CTkFont(size=13),
+            placeholder_text="DD-MM-YYYY",
         )
-        self._date_entry.grid(row=1, column=0, pady=(4, 0), sticky="w")
+        self._date_entry.grid(row=0, column=0)
+        self._date_entry.bind("<KeyRelease>", lambda _: self._update_preview())
 
-        self._ext_seg = ctk.CTkSegmentedButton(
-            row6,
-            values=EXTENSIONS,
-            variable=self._ext_var,
-            font=ctk.CTkFont(size=13),
+        self._today_btn = ctk.CTkButton(
+            date_input, text="Today", width=64, height=36,
+            font=ctk.CTkFont(size=12),
+            fg_color=("gray80", "gray35"), hover_color=("gray70", "gray45"),
+            text_color=("gray10", "gray90"), command=self._set_today,
         )
-        self._ext_seg.grid(row=1, column=1, padx=(40, 0), pady=(4, 0), sticky="w")
+        self._today_btn.grid(row=0, column=1, padx=(6, 0))
 
-        # --- Preview ---
+        self._ext_menu = ctk.CTkOptionMenu(
+            date_row, values=EXTENSIONS, variable=self._ext_var,
+            width=110, height=36,
+            font=ctk.CTkFont(size=13), dropdown_font=ctk.CTkFont(size=13),
+        )
+        self._ext_menu.grid(row=2, column=2, padx=(24, 0), pady=(4, 0), sticky="w")
+
+        # --- Preview (editable) ---
         ctk.CTkFrame(self, height=1, fg_color=("gray82", "gray28")).grid(
-            row=7, column=0, sticky="ew", padx=16, pady=(16, 0)
+            row=7, column=0, sticky="ew", padx=16, pady=(14, 0)
         )
+
+        preview_hdr = ctk.CTkFrame(self, fg_color="transparent")
+        preview_hdr.grid(row=8, column=0, padx=24, pady=(10, 4), sticky="ew")
+        preview_hdr.columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            self, text="Generated Filename Preview",
+            preview_hdr, text="Filename  (editable)",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=8, column=0, padx=24, pady=(12, 4), sticky="w")
+        ).grid(row=0, column=0, sticky="w")
 
-        preview_box = ctk.CTkFrame(self, fg_color=("gray91", "gray18"), corner_radius=8)
-        preview_box.grid(row=9, column=0, padx=24, sticky="ew")
-        preview_box.columnconfigure(0, weight=1)
+        ctk.CTkButton(
+            preview_hdr, text="↺ Reset", width=70, height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="transparent", border_width=1,
+            text_color=("gray40", "gray65"), hover_color=("gray84", "gray28"),
+            command=self._update_preview,
+        ).grid(row=0, column=1, sticky="e")
 
-        self._preview_label = ctk.CTkLabel(
-            preview_box,
-            text="",
+        self._preview_entry = ctk.CTkEntry(
+            self, height=38,
             font=ctk.CTkFont(family="Courier New", size=12),
-            wraplength=460,
-            justify="left",
-            anchor="w",
+            fg_color=("gray91", "gray18"), border_color=("gray75", "gray35"),
         )
-        self._preview_label.grid(row=0, column=0, padx=12, pady=10, sticky="ew")
+        self._preview_entry.grid(row=9, column=0, padx=24, sticky="ew")
+        self._preview_entry.bind("<KeyRelease>", lambda _: self._refresh_btn_states())
 
-        # --- Action buttons ---
+        # --- Buttons ---
         btn_row = ctk.CTkFrame(self, fg_color="transparent")
-        btn_row.grid(row=10, column=0, padx=24, pady=(16, 22), sticky="ew")
+        btn_row.grid(row=10, column=0, padx=24, pady=(14, 18), sticky="ew")
         btn_row.columnconfigure(0, weight=1)
 
         ctk.CTkButton(
-            btn_row, text="Cancel",
-            width=90, height=40,
-            fg_color="transparent",
-            border_width=1,
-            text_color=("gray10", "gray90"),
-            hover_color=("gray88", "gray30"),
+            btn_row, text="Cancel", width=90, height=40,
+            fg_color="transparent", border_width=1,
+            text_color=("gray10", "gray90"), hover_color=("gray88", "gray30"),
             command=self.destroy,
         ).grid(row=0, column=2, padx=(8, 0))
 
         self._copy_btn = ctk.CTkButton(
-            btn_row, text="Copy Name",
-            width=110, height=40,
-            fg_color=("gray75", "gray40"),
-            hover_color=("gray65", "gray50"),
+            btn_row, text="Copy Name", width=110, height=40,
+            fg_color=("gray75", "gray40"), hover_color=("gray65", "gray50"),
             command=self._copy_name,
         )
         self._copy_btn.grid(row=0, column=1, padx=(8, 0))
 
         self._create_btn = ctk.CTkButton(
-            btn_row, text="＋  Create File",
-            height=40,
+            btn_row, text="＋  Create File", height=40,
             command=self._create_file,
         )
         self._create_btn.grid(row=0, column=0, sticky="ew")
@@ -206,71 +220,89 @@ class CreateFileDialog(ctk.CTkToplevel):
     # Event handlers
     # ------------------------------------------------------------------
 
-    def _on_doc_type_change(self, value):
-        if value == "— Custom —":
-            if not self._custom_entry_visible:
-                self._custom_entry.grid(row=0, column=0, sticky="ew", pady=(4, 0))
-                self._custom_entry_visible = True
-            self.after(50, self._custom_entry.focus)
-        else:
-            if self._custom_entry_visible:
-                self._custom_entry.grid_remove()
-                self._custom_entry_visible = False
+    def _on_doc_type_change(self):
+        is_custom = self._doc_type_var.get() == "— Custom —"
+        self._extra_entry.configure(
+            placeholder_text=_CUSTOM_PLACEHOLDER if is_custom else _APPEND_PLACEHOLDER
+        )
         self._update_preview()
 
+    def _on_include_date_toggle(self):
+        self._toggle_date_fields()
+        self._update_preview()
+        if self.settings:
+            self.settings.set("include_date", self._include_date_var.get())
+
+    def _toggle_date_fields(self):
+        state = "normal" if self._include_date_var.get() else "disabled"
+        self._date_entry.configure(state=state)
+        self._today_btn.configure(state=state)
+
+    def _set_today(self):
+        self._date_var.set(date.today().strftime("%d-%m-%Y"))
+
     def _get_doc_type(self) -> str:
-        val = self._doc_type_var.get()
+        val   = self._doc_type_var.get()
+        extra = self._extra_var.get().strip()
+
         if val == "— Custom —":
-            return self._custom_var.get().strip()
-        return val
+            # extra text IS the doc type
+            return extra
+        else:
+            # preset + optional append text
+            if extra:
+                extra_clean = re.sub(r"[^A-Za-z0-9_\-]", "_", extra).strip("_")
+                extra_clean = re.sub(r"_+", "_", extra_clean)
+                return f"{val}_{extra_clean}"
+            return val
+
+    def _get_date_str(self) -> str:
+        if not self._include_date_var.get():
+            return ""
+        return self._date_var.get().strip()
 
     def _update_preview(self):
         doc_type = self._get_doc_type()
-        date_str = self._date_var.get().strip()
-        ext = self._ext_var.get().lower()
+        date_str = self._get_date_str()
+        ext      = self._ext_var.get().lower()
 
-        preview = preview_filename(self.current_path, self.root_path, doc_type, date_str, ext)
-        self._preview_label.configure(text=preview)
+        generated = preview_filename(self.current_path, self.root_path, doc_type, date_str, ext)
 
-        is_valid = (
-            preview
-            and not preview.startswith("⚠")
-            and not preview.startswith("Select")
-            and not preview.startswith("Enter")
-            and not preview.startswith("Please")
-        )
-        state = "normal" if is_valid else "disabled"
+        self._preview_entry.configure(state="normal")
+        self._preview_entry.delete(0, "end")
+        self._preview_entry.insert(0, generated)
+        self._refresh_btn_states()
+
+    def _refresh_btn_states(self):
+        text = self._preview_entry.get().strip()
+        ok   = bool(text) and not text.startswith("⚠") and not text.startswith("Select")
+        state = "normal" if ok else "disabled"
         self._create_btn.configure(state=state)
         self._copy_btn.configure(state=state)
 
     def _copy_name(self):
-        doc_type = self._get_doc_type()
-        date_str = self._date_var.get().strip()
-        ext = self._ext_var.get().lower()
-        try:
-            filename, _ = generate_filename(
-                self.current_path, self.root_path, doc_type, date_str, ext
-            )
+        filename = self._preview_entry.get().strip()
+        if filename:
             copy_to_clipboard(self, filename)
             self._copy_btn.configure(text="✓  Copied!")
             self.after(2000, lambda: self._copy_btn.configure(text="Copy Name"))
-        except ValueError:
-            pass
 
     def _create_file(self):
-        doc_type = self._get_doc_type()
-        date_str = self._date_var.get().strip()
-        ext = self._ext_var.get().lower()
+        filename = self._preview_entry.get().strip()
+        if not filename:
+            return
+        dest = self.current_path / filename
+        if dest.exists():
+            messagebox.showerror("File Already Exists",
+                                 f'"{filename}" already exists in this folder.', parent=self)
+            return
         try:
-            filename, dest = generate_filename(
-                self.current_path, self.root_path, doc_type, date_str, ext
-            )
             create_empty_file(dest)
+            if self.settings and self._doc_type_var.get() != "— Custom —":
+                self.settings.set("last_doc_type", self._doc_type_var.get())
             if self.on_success:
                 self.on_success(dest)
             self.destroy()
-        except ValueError as e:
-            messagebox.showerror("Cannot Create File", str(e), parent=self)
         except OSError as e:
             messagebox.showerror("File System Error", str(e), parent=self)
 
@@ -278,9 +310,10 @@ class CreateFileDialog(ctk.CTkToplevel):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _center_on(self, master):
+    def _center_on_screen(self):
         self.update_idletasks()
-        w, h = 540, 560
-        mx = master.winfo_rootx() + master.winfo_width() // 2 - w // 2
-        my = master.winfo_rooty() + master.winfo_height() // 2 - h // 2
-        self.geometry(f"{w}x{h}+{mx}+{my}")
+        w  = 560
+        h  = min(self.winfo_reqheight(), 640)
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")

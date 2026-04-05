@@ -22,12 +22,14 @@ def generate_filename(
     Generate a filename that encodes the full folder path from root.
     Returns (filename, full_destination_path).
     Raises ValueError with a user-friendly message on invalid input.
+    date_str may be empty/None to omit the date from the filename.
     """
-    # Validate date
-    try:
-        datetime.strptime(date_str, "%Y%m%d")
-    except ValueError:
-        raise ValueError("Invalid date — please use YYYYMMDD format (e.g. 20250401).")
+    # Validate date (only if provided) — expects DD-MM-YYYY
+    if date_str:
+        try:
+            datetime.strptime(date_str, "%d-%m-%Y")
+        except ValueError:
+            raise ValueError("Invalid date — please use DD-MM-YYYY format (e.g. 05-04-2026).")
 
     # Compute relative path
     try:
@@ -37,7 +39,8 @@ def generate_filename(
 
     parts = relative.parts
     if not parts:
-        raise ValueError("Please navigate into a subfolder — don't use the root folder itself.")
+        # User selected the root folder itself — use its name as the single segment
+        parts = (root_path.name or sanitize_segment(str(root_path)),)
 
     sanitized = [sanitize_segment(p) for p in parts]
     sanitized = [p for p in sanitized if p]
@@ -46,13 +49,17 @@ def generate_filename(
         raise ValueError("Folder names are not usable after sanitization (too many special characters).")
 
     path_component = "_".join(sanitized)
-    doc_type_clean = sanitize_segment(document_type)
-
-    if not doc_type_clean:
-        raise ValueError("Please enter a document type.")
+    doc_type_clean = sanitize_segment(document_type) if document_type else ""
 
     ext = extension.lstrip(".")
-    base = f"{path_component}_{doc_type_clean}_{date_str}"
+    if doc_type_clean and date_str:
+        base = f"{path_component}_{doc_type_clean}_{date_str}"
+    elif doc_type_clean:
+        base = f"{path_component}_{doc_type_clean}"
+    elif date_str:
+        base = f"{path_component}_{date_str}"
+    else:
+        base = path_component
 
     # Warn + truncate if filename would exceed 200 chars
     if len(base) > 195:
@@ -89,10 +96,6 @@ def preview_filename(
     """
     if not current_path or not root_path:
         return "Select a folder from the left panel"
-    if not document_type:
-        return "Select a document type above"
-    if not date_str:
-        return "Enter a date above"
     try:
         filename, _ = generate_filename(
             Path(current_path), Path(root_path), document_type, date_str, extension

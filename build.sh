@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Building CA File Manager..."
-pyinstaller --onefile --windowed --name=CAFileManager main.py
+echo "Building Nestd File Manager..."
+pyinstaller --onefile --windowed --name=Nestd main.py
 echo ""
-echo "Done! Find CAFileManager in the dist/ folder."
+echo "Done! Find Nestd in the dist/ folder."

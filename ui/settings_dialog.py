@@ -109,10 +109,26 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _on_theme(self, value: str):
         theme = value.lower()
+        # Release grab before theme change — CTk recreates all widgets
+        # internally which causes the grab to get stuck on a stale widget.
+        try:
+            self.grab_release()
+        except Exception:
+            pass
         ctk.set_appearance_mode(theme)
         self.settings.set("theme", theme)
         if self.on_theme_change:
             self.on_theme_change(theme)
+        # Re-grab after widgets finish redrawing
+        self.after(200, self._restore_grab)
+
+    def _restore_grab(self):
+        try:
+            self.lift()
+            self.focus_force()
+            self.grab_set()
+        except Exception:
+            pass
 
     def _center_on(self, master, w: int, h: int):
         self.update_idletasks()

@@ -1,6 +1,24 @@
 @echo off
 echo Building CA File Manager for Windows...
-pyinstaller --onefile --windowed --icon=assets/icon.ico --name=CAFileManager main.py
 echo.
-echo Done! Find CAFileManager.exe in the dist/ folder.
+
+echo Installing / checking dependencies...
+pip install customtkinter pyinstaller --quiet
+if %errorlevel% neq 0 (
+    echo ERROR: pip install failed. Make sure Python is installed and on PATH.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Running PyInstaller...
+pyinstaller --onefile --windowed --name=NestDFileManager main.py
+if %errorlevel% neq 0 (
+    echo ERROR: Build failed. See output above.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Done! Find NestDFileManager.exe in the dist\ folder.
 pause

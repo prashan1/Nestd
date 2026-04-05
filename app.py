@@ -13,9 +13,9 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("CA File Manager")
-        self.geometry("1150x720")
+        self.title("Nestd — Simple File Manager")
         self.minsize(850, 520)
+        self.after(0, lambda: self.state("zoomed"))  # open maximized on Windows
 
         # Persist settings in ~/.ca_file_manager/
         config_dir = Path.home() / ".ca_file_manager"
@@ -57,7 +57,7 @@ class App(ctk.CTk):
         toolbar.grid_propagate(False)
 
         ctk.CTkLabel(
-            toolbar, text="CA File Manager",
+            toolbar, text="Nestd",
             font=ctk.CTkFont(size=19, weight="bold"),
         ).grid(row=0, column=0, padx=16, pady=14, sticky="w")
 
@@ -134,6 +134,7 @@ class App(ctk.CTk):
         self._file_panel = FilePanel(
             self,
             on_create=self._on_create_file,
+            on_new_folder=self._on_new_folder,
             corner_radius=0,
             fg_color=("white", "gray12"),
         )
@@ -145,7 +146,7 @@ class App(ctk.CTk):
 
     def _prompt_root_folder(self):
         folder = filedialog.askdirectory(
-            title="Select Root Folder — CA File Manager",
+            title="Select Root Folder — Nestd",
             initialdir=self.settings.get("root_folder") or str(Path.home()),
         )
         # Bring main window back to front on macOS after dialog closes
@@ -197,8 +198,17 @@ class App(ctk.CTk):
             current_path=folder,
             root_path=self.root_path,
             doc_types=self.settings.doc_types,
+            settings=self.settings,
             on_success=self._on_file_created,
         )
+
+    def _on_new_folder(self, new_folder: Path):
+        """Called after a subfolder is created — refresh tree, expand to it, select it."""
+        # Re-expand all ancestors so the new folder is visible in the tree
+        self._folder_tree.expanded.add(new_folder.parent)
+        self._folder_tree.selected = new_folder
+        self._folder_tree.refresh()
+        self._on_folder_select(new_folder)
 
     def _on_file_created(self, file_path: Path):
         self._file_panel.refresh()

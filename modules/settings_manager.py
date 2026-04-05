@@ -5,6 +5,8 @@ DEFAULT_SETTINGS = {
     "root_folder": "",
     "theme": "dark",
     "last_path": "",
+    "include_date": True,
+    "last_doc_type": "",
 }
 
 DEFAULT_DOC_TYPES = [

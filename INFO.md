@@ -1,4 +1,4 @@
-# CA File Manager — INFO.md
+# FileTrail File Manager — INFO.md
 
 ## Project Overview
 Desktop application for Chartered Accountants (CAs) in India.

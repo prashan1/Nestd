@@ -90,7 +90,18 @@ class SettingsDialog(ctk.CTkToplevel):
             self, text="Close",
             height=38, width=90,
             command=self.destroy,
-        ).grid(row=6, column=0, padx=24, pady=(20, 22), sticky="e")
+        ).grid(row=6, column=0, padx=24, pady=(20, 10), sticky="e")
+
+        # Divider + credit
+        ctk.CTkFrame(self, height=1, fg_color=("gray82", "gray28")).grid(
+            row=7, column=0, sticky="ew", padx=16, pady=(0, 10)
+        )
+        ctk.CTkLabel(
+            self,
+            text="FileTrail  ·  Built by Abhilash Negi",
+            font=ctk.CTkFont(size=11),
+            text_color=("gray55", "gray45"),
+        ).grid(row=8, column=0, padx=24, pady=(0, 14), sticky="w")
 
     def _change_root(self):
         folder = filedialog.askdirectory(

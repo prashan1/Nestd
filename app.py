@@ -56,10 +56,19 @@ class App(ctk.CTk):
         toolbar.columnconfigure(1, weight=1)
         toolbar.grid_propagate(False)
 
+        title_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        title_frame.grid(row=0, column=0, padx=16, pady=10, sticky="w")
+
         ctk.CTkLabel(
-            toolbar, text="FileTrail",
+            title_frame, text="FileTrail",
             font=ctk.CTkFont(size=19, weight="bold"),
-        ).grid(row=0, column=0, padx=16, pady=14, sticky="w")
+        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+
+        ctk.CTkLabel(
+            title_frame, text="by Abhilash Negi",
+            font=ctk.CTkFont(size=10),
+            text_color=("gray55", "gray50"),
+        ).grid(row=0, column=1, sticky="sw", pady=(6, 0))
 
         self._root_label = ctk.CTkLabel(
             toolbar,

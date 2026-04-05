@@ -49,10 +49,11 @@ class FolderTree(ctk.CTkFrame):
         # Update scroll region when inner frame size changes
         self._inner.bind("<Configure>", self._on_inner_resize)
 
-        # Mouse-wheel scrolling (works on macOS + Windows + Linux)
-        self._canvas.bind("<MouseWheel>", self._on_wheel)
-        self._canvas.bind("<Button-4>", self._on_wheel)
-        self._canvas.bind("<Button-5>", self._on_wheel)
+        # Mouse-wheel scrolling — bind to canvas AND inner frame
+        for w in (self._canvas, self._inner):
+            w.bind("<MouseWheel>", self._on_wheel)
+            w.bind("<Button-4>",   self._on_wheel)
+            w.bind("<Button-5>",   self._on_wheel)
 
     # ------------------------------------------------------------------
     # Public API
@@ -162,6 +163,9 @@ class FolderTree(ctk.CTkFrame):
         )
         btn.grid(row=row[0], column=0, sticky="ew",
                  padx=(depth * 14 + 4, 4), pady=1)
+        btn.bind("<MouseWheel>", self._on_wheel)
+        btn.bind("<Button-4>",   self._on_wheel)
+        btn.bind("<Button-5>",   self._on_wheel)
         self._buttons.append(btn)
         row[0] += 1
 

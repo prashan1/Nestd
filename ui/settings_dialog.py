@@ -6,7 +6,7 @@ from modules.settings_manager import SettingsManager
 
 
 class SettingsDialog(ctk.CTkToplevel):
-    """Simple settings dialog: root folder + appearance theme."""
+    """Settings dialog — root folder + appearance theme. Non-modal (no grab_set)."""
 
     def __init__(self, master, settings: SettingsManager, on_theme_change=None, on_root_changed=None):
         super().__init__(master)
@@ -16,13 +16,11 @@ class SettingsDialog(ctk.CTkToplevel):
 
         self.title("Settings")
         self.resizable(False, False)
-        self.transient(master)
-
+        self.transient(master)   # stays above main window — no grab needed
         self.after(50, self.lift)
-        self.after(100, self.grab_set)
 
-        self._center_on(master, 440, 300)
         self._build_ui()
+        self.after(10, self._center_on_screen)
 
     def _build_ui(self):
         self.columnconfigure(0, weight=1)
@@ -87,11 +85,10 @@ class SettingsDialog(ctk.CTkToplevel):
         self._theme_seg.set(current_theme)
         self._theme_seg.grid(row=0, column=1)
 
-        # Close
+        # Close button
         ctk.CTkButton(
             self, text="Close",
-            height=38,
-            width=90,
+            height=38, width=90,
             command=self.destroy,
         ).grid(row=6, column=0, padx=24, pady=(20, 22), sticky="e")
 
@@ -109,29 +106,15 @@ class SettingsDialog(ctk.CTkToplevel):
 
     def _on_theme(self, value: str):
         theme = value.lower()
-        # Release grab before theme change — CTk recreates all widgets
-        # internally which causes the grab to get stuck on a stale widget.
-        try:
-            self.grab_release()
-        except Exception:
-            pass
         ctk.set_appearance_mode(theme)
         self.settings.set("theme", theme)
         if self.on_theme_change:
             self.on_theme_change(theme)
-        # Re-grab after widgets finish redrawing
-        self.after(200, self._restore_grab)
 
-    def _restore_grab(self):
-        try:
-            self.lift()
-            self.focus_force()
-            self.grab_set()
-        except Exception:
-            pass
-
-    def _center_on(self, master, w: int, h: int):
+    def _center_on_screen(self):
         self.update_idletasks()
-        mx = master.winfo_rootx() + master.winfo_width() // 2 - w // 2
-        my = master.winfo_rooty() + master.winfo_height() // 2 - h // 2
-        self.geometry(f"{w}x{h}+{mx}+{my}")
+        w = self.winfo_reqwidth()
+        h = self.winfo_reqheight()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")

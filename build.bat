@@ -12,7 +12,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo Running PyInstaller...
-pyinstaller --onefile --windowed --name=NestDFileManager main.py
+pyinstaller --onedir --windowed --name=FileTrail main.py
 if %errorlevel% neq 0 (
     echo ERROR: Build failed. See output above.
     pause
@@ -20,5 +20,6 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Done! Find NestDFileManager.exe in the dist\ folder.
+echo Done! Zip the dist\FileTrail\ folder and share it.
+echo Your colleague unzips it and double-clicks FileTrail.exe inside.
 pause

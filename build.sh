@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Building Nestd File Manager..."
-pyinstaller --onefile --windowed --name=Nestd main.py
+echo "Building FileTrail File Manager..."
+pyinstaller --onefile --windowed --name=FileTrail main.py
 echo ""
-echo "Done! Find Nestd in the dist/ folder."
+echo "Done! Find FileTrail in the dist/ folder."

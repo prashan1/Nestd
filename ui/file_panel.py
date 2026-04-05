@@ -303,6 +303,20 @@ class FilePanel(ctk.CTkFrame):
                 text_color=("gray50", "gray60"), anchor="e",
             ).grid(row=0, column=3, padx=(8, 8), pady=7, sticky="e")
 
+        # Forward wheel from every child widget to the scrollable frame canvas
+        self._bind_scroll(self._list)
+
+    def _bind_scroll(self, widget):
+        """Recursively bind mouse-wheel on every child so the file list scrolls."""
+        def _scroll(event):
+            # CTkScrollableFrame exposes its internal canvas as _parent_canvas
+            canvas = getattr(self._list, "_parent_canvas", None)
+            if canvas:
+                canvas.yview_scroll(-int(event.delta / 120), "units")
+        widget.bind("<MouseWheel>", _scroll)
+        for child in widget.winfo_children():
+            self._bind_scroll(child)
+
     def _show_placeholder(self, text: str, parent=None):
         target = parent if parent else self._list
         ctk.CTkLabel(

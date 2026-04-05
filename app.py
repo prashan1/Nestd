@@ -13,12 +13,12 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Nestd — Simple File Manager")
+        self.title("FileTrail")
         self.minsize(850, 520)
         self.after(0, lambda: self.state("zoomed"))  # open maximized on Windows
 
-        # Persist settings in ~/.ca_file_manager/
-        config_dir = Path.home() / ".ca_file_manager"
+        # Persist settings in ~/.filetrail/
+        config_dir = Path.home() / ".filetrail"
         self.settings = SettingsManager(config_dir)
 
         # Apply saved theme
@@ -57,7 +57,7 @@ class App(ctk.CTk):
         toolbar.grid_propagate(False)
 
         ctk.CTkLabel(
-            toolbar, text="Nestd",
+            toolbar, text="FileTrail",
             font=ctk.CTkFont(size=19, weight="bold"),
         ).grid(row=0, column=0, padx=16, pady=14, sticky="w")
 
@@ -146,7 +146,7 @@ class App(ctk.CTk):
 
     def _prompt_root_folder(self):
         folder = filedialog.askdirectory(
-            title="Select Root Folder — Nestd",
+            title="Select Root Folder — FileTrail",
             initialdir=self.settings.get("root_folder") or str(Path.home()),
         )
         # Bring main window back to front on macOS after dialog closes

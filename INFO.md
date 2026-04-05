@@ -1,4 +1,4 @@
-# CA File Manager — CLAUDE.md
+# CA File Manager — INFO.md
 
 ## Project Overview
 Desktop application for Chartered Accountants (CAs) in India.
